@@ -36,6 +36,15 @@
 #include <unistd.h>
 
 #include "monitor_ioctl.h"
+#define MAX_CONTAINERS 10
+
+typedef struct {
+    char id[32];
+    pid_t pid;
+} simple_container;
+
+simple_container containers[MAX_CONTAINERS];
+int container_count = 0;
 
 #define STACK_SIZE (1024 * 1024)
 #define CONTAINER_ID_LEN 32
@@ -410,7 +419,7 @@ static int run_supervisor(const char *rootfs)
         pthread_mutex_destroy(&ctx.metadata_lock);
         return 1;
     }
-
+ 
     /*
      * TODO:
      *   1) open /dev/container_monitor
@@ -419,7 +428,11 @@ static int run_supervisor(const char *rootfs)
      *   4) spawn the logger thread
      *   5) enter the supervisor event loop
      */
-    fprintf(stderr, "Supervisor mode not implemented yet for base-rootfs: %s\n", rootfs);
+    printf("Supervisor started...\n");
+
+while (1) {
+    sleep(1);
+}
 
     bounded_buffer_begin_shutdown(&ctx.log_buffer);
     bounded_buffer_destroy(&ctx.log_buffer);
@@ -437,9 +450,72 @@ static int run_supervisor(const char *rootfs)
  */
 static int send_control_request(const control_request_t *req)
 {
-    (void)req;
-    fprintf(stderr, "Control-plane client path not implemented.\n");
-    return 1;
+    switch (req->kind) {
+        case CMD_START: {
+    printf("Starting container: %s\n", req->container_id);
+
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        // Child process
+
+        char *cmd = strdup(req->command);  // make modifiable copy       
+        char *args[10];                    // simple args array
+        int i = 0;
+
+        // split command into tokens
+        char *token = strtok(cmd, " ");
+        while (token != NULL && i < 9) {
+            args[i++] = token;
+            token = strtok(NULL, " ");
+        }
+        args[i] = NULL;
+
+        execvp(args[0], args);
+
+        perror("exec failed");
+        exit(1);
+    }
+    else if (pid > 0) {
+        printf("Container started with PID: %d\n", pid);
+
+        strcpy(containers[container_count].id, req->container_id);
+        containers[container_count].pid = pid;
+        container_count++;
+} 
+    else {
+        perror("fork failed");
+    }
+
+    break;
+}
+        case CMD_RUN:
+            printf("Running container: %s\n", req->container_id);
+            break;
+        case CMD_PS:
+    printf("ID\tPID\n");
+    for (int i = 0; i < container_count; i++) {
+        printf("%s\t%d\n", containers[i].id, containers[i].pid);
+    }
+    break;
+        case CMD_LOGS:
+            printf("Showing logs for: %s\n", req->container_id);
+            break;
+        case CMD_STOP:
+    printf("Stopping container: %s\n", req->container_id);
+
+    for (int i = 0; i < container_count; i++) {
+        if (strcmp(containers[i].id, req->container_id) == 0) {
+            kill(containers[i].pid, SIGKILL);
+            printf("Killed PID: %d\n", containers[i].pid);
+            break;
+        }
+    }
+    break;
+        default:
+            printf("Unknown command\n");
+    }
+    return 0;
 }
 
 static int cmd_start(int argc, char *argv[])
@@ -578,3 +654,4 @@ int main(int argc, char *argv[])
     usage(argv[0]);
     return 1;
 }
+
