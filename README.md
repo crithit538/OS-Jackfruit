@@ -142,6 +142,26 @@ OS-Jackfruit/
 
 ---
 
+
+##Screenshots
+
+### 1. Container Start
+![Start](screenshots/start.png)
+
+### 2. Container Status (engine ps)
+![Status](screenshots/ps.png)
+
+### 3. Container Stop
+![Stop](screenshots/stop.png)
+
+### 4. Logs
+![Logs](screenshots/logs.png)
+
+### 4. Kernel Logs (dmesg)
+![Kernel](screenshots/kernel.png)
+
+
+
 ## ✅ Conclusion
 
 This project demonstrates:
