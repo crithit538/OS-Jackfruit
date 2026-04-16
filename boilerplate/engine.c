@@ -394,7 +394,7 @@ int unregister_from_monitor(int monitor_fd, const char *container_id, pid_t host
  *   - initialize shared metadata and the bounded buffer
  *   - start the logging thread
  *   - accept control requests and update container state
- *   - reap children and respond to signals
+ *   -reap children and respond to signals
  */
 static int run_supervisor(const char *rootfs)
 {
@@ -418,8 +418,17 @@ static int run_supervisor(const char *rootfs)
         perror("bounded_buffer_init");
         pthread_mutex_destroy(&ctx.metadata_lock);
         return 1;
+    }   // ✅ ONLY ONE } HERE
+
+    printf("Supervisor started...\n");
+
+    while (1) {
+        sleep(5);
+        printf("Supervisor alive...\n");
     }
- 
+
+    return 1;
+}  
     /*
      * TODO:
      *   1) open /dev/container_monitor
@@ -428,17 +437,7 @@ static int run_supervisor(const char *rootfs)
      *   4) spawn the logger thread
      *   5) enter the supervisor event loop
      */
-    printf("Supervisor started...\n");
-
-while (1) {
-    sleep(1);
-}
-
-    bounded_buffer_begin_shutdown(&ctx.log_buffer);
-    bounded_buffer_destroy(&ctx.log_buffer);
-    pthread_mutex_destroy(&ctx.metadata_lock);
-    return 1;
-}
+    
 
 /*
  * TODO:
@@ -459,11 +458,10 @@ static int send_control_request(const control_request_t *req)
     if (pid == 0) {
         // Child process
 
-        char *cmd = strdup(req->command);  // make modifiable copy       
-        char *args[10];                    // simple args array
+        char *cmd = strdup(req->command);
+        char *args[10];
         int i = 0;
 
-        // split command into tokens
         char *token = strtok(cmd, " ");
         while (token != NULL && i < 9) {
             args[i++] = token;
@@ -477,41 +475,116 @@ static int send_control_request(const control_request_t *req)
         exit(1);
     }
     else if (pid > 0) {
-        printf("Container started with PID: %d\n", pid);
+        // Parent process → remove old entry + add new one
 
-        strcpy(containers[container_count].id, req->container_id);
-        containers[container_count].pid = pid;
-        container_count++;
-} 
+        FILE *f = fopen("containers.txt", "r");
+        FILE *temp = fopen("temp.txt", "w");
+
+        char id[32];
+        int old_pid;
+
+        // Remove old entry if exists
+        if (f != NULL) {
+            while (fscanf(f, "%s %d", id, &old_pid) != EOF) {
+                if (strcmp(id, req->container_id) != 0) {
+                    fprintf(temp, "%s %d\n", id, old_pid);
+                }
+            }
+            fclose(f);
+        }
+
+        // Add new container
+        fprintf(temp, "%s %d running\n", req->container_id, pid);
+        fclose(temp);
+
+        remove("containers.txt");
+        rename("temp.txt", "containers.txt");
+        FILE *log = fopen("logs.txt", "a");
+        fprintf(log, "START %s PID %d\n", req->container_id, pid);
+        fclose(log);
+        printf("Container started with PID: %d\n", pid);
+    }
     else {
         perror("fork failed");
     }
 
     break;
-}
+}           
+   
+
+    
         case CMD_RUN:
             printf("Running container: %s\n", req->container_id);
             break;
-        case CMD_PS:
-    printf("ID\tPID\n");
-    for (int i = 0; i < container_count; i++) {
-        printf("%s\t%d\n", containers[i].id, containers[i].pid);
-    }
-    break;
-        case CMD_LOGS:
-            printf("Showing logs for: %s\n", req->container_id);
-            break;
-        case CMD_STOP:
-    printf("Stopping container: %s\n", req->container_id);
+        case CMD_PS: {
+    FILE *f = fopen("containers.txt", "r");
 
-    for (int i = 0; i < container_count; i++) {
-        if (strcmp(containers[i].id, req->container_id) == 0) {
-            kill(containers[i].pid, SIGKILL);
-            printf("Killed PID: %d\n", containers[i].pid);
-            break;
+    if (!f) {
+        printf("No containers found\n");
+        break;
+    }
+
+    char id[32];
+    int pid;
+    char state[20];
+
+    printf("ID\tPID\tSTATE\n");
+
+    while (fscanf(f, "%s %d %s", id, &pid, state) != EOF) {
+        printf("%s\t%d\t%s\n", id, pid, state);
+    }
+
+    fclose(f);
+    break;   // 🔥 THIS LINE FIXES EVERYTHING
+}
+        
+       case CMD_STOP: {
+    FILE *f = fopen("containers.txt", "r");
+    FILE *temp = fopen("temp.txt", "w");
+
+    char id[32];
+    int pid;
+    char state[20];
+
+    while (fscanf(f, "%s %d %s", id, &pid, state) != EOF) {
+        if (strcmp(id, req->container_id) == 0) {
+            kill(pid, SIGKILL);
+            printf("Stopped container: %s\n", id);
+            FILE *log = fopen("logs.txt", "a");
+            fprintf(log, "STOP %s PID %d\n", id, pid);
+            fclose(log);
+
+            fprintf(temp, "%s %d stopped\n", id, pid);
+        } else {
+            fprintf(temp, "%s %d %s\n", id, pid, state);
         }
     }
+
+    fclose(f);
+    fclose(temp);
+
+    remove("containers.txt");
+    rename("temp.txt", "containers.txt");
+
     break;
+}
+      case CMD_LOGS: {
+    FILE *f = fopen("logs.txt", "r");
+
+    if (!f) {
+        printf("No logs found\n");
+        break;
+    }
+
+    char line[100];
+
+    while (fgets(line, sizeof(line), f)) {
+        printf("%s", line);
+    }
+
+    fclose(f);
+    break;
+}
         default:
             printf("Unknown command\n");
     }
@@ -589,20 +662,23 @@ static int cmd_ps(void)
     return send_control_request(&req);
 }
 
-static int cmd_logs(int argc, char *argv[])
+static int cmd_logs()
 {
-    control_request_t req;
+    FILE *f = fopen("logs.txt", "r");
 
-    if (argc < 3) {
-        fprintf(stderr, "Usage: %s logs <id>\n", argv[0]);
+    if (!f) {
+        printf("No logs found\n");
         return 1;
     }
 
-    memset(&req, 0, sizeof(req));
-    req.kind = CMD_LOGS;
-    strncpy(req.container_id, argv[2], sizeof(req.container_id) - 1);
+    char line[100];
 
-    return send_control_request(&req);
+    while (fgets(line, sizeof(line), f)) {
+        printf("%s", line);
+    }
+
+    fclose(f);
+    return 0;
 }
 
 static int cmd_stop(int argc, char *argv[])
@@ -629,29 +705,39 @@ int main(int argc, char *argv[])
     }
 
     if (strcmp(argv[1], "supervisor") == 0) {
-        if (argc < 3) {
-            fprintf(stderr, "Usage: %s supervisor <base-rootfs>\n", argv[0]);
-            return 1;
-        }
-        return run_supervisor(argv[2]);
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s supervisor <base-rootfs>\n", argv[0]);
+        return 1;
     }
-
-    if (strcmp(argv[1], "start") == 0)
-        return cmd_start(argc, argv);
-
-    if (strcmp(argv[1], "run") == 0)
-        return cmd_run(argc, argv);
-
-    if (strcmp(argv[1], "ps") == 0)
-        return cmd_ps();
-
-    if (strcmp(argv[1], "logs") == 0)
-        return cmd_logs(argc, argv);
-
-    if (strcmp(argv[1], "stop") == 0)
-        return cmd_stop(argc, argv);
-
-    usage(argv[0]);
-    return 1;
+    return run_supervisor(argv[2]);
 }
 
+if (strcmp(argv[1], "start") == 0)
+    return cmd_start(argc, argv);
+
+if (strcmp(argv[1], "run") == 0)
+    return cmd_run(argc, argv);
+
+if (strcmp(argv[1], "ps") == 0)
+    return cmd_ps();
+
+if (strcmp(argv[1], "stop") == 0) {
+    if (argc < 3) {
+        printf("Usage: stop <id>\n");
+        return 1;
+    }
+
+    control_request_t req;
+    memset(&req, 0, sizeof(req));
+
+    req.kind = CMD_STOP;
+    strncpy(req.container_id, argv[2], sizeof(req.container_id) - 1);
+
+    return send_control_request(&req);
+}
+if (strcmp(argv[1], "logs") == 0)
+    return cmd_logs();
+
+usage(argv[0]);
+return 1;
+}
