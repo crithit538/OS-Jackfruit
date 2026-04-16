@@ -1,111 +1,157 @@
-# Multi-Container Runtime
+# OS-Jackfruit: Container Runtime with Kernel Monitoring
 
-A lightweight Linux container runtime in C with a long-running supervisor and a kernel-space memory monitor.
+## 📌 Overview
 
-Read [`project-guide.md`](project-guide.md) for the full project specification.
+This project implements a simple container runtime along with a Linux kernel module for monitoring container-related activities. It allows users to start, stop, list, and log containers, while also integrating kernel-level monitoring through a device interface.
 
 ---
 
-## Getting Started
+## 🚀 Features
 
-### 1. Fork the Repository
+### 1. Container Runtime
 
-1. Go to [github.com/shivangjhalani/OS-Jackfruit](https://github.com/shivangjhalani/OS-Jackfruit)
-2. Click **Fork** (top-right)
-3. Clone your fork:
+* Start containers using custom root filesystem
+* Stop running containers
+* List all containers (`ps`)
+* Track container states (running, stopped, etc.)
 
-```bash
-git clone https://github.com/<your-username>/OS-Jackfruit.git
-cd OS-Jackfruit
-```
+### 2. Logging System
 
-### 2. Set Up Your VM
+* Logs stored in `logs.txt`
+* Tracks:
 
-You need an **Ubuntu 22.04 or 24.04** VM with **Secure Boot OFF**. WSL will not work.
+  * Container start events
+  * Container stop events
+* View logs using:
 
-Install dependencies:
+  ```bash
+  ./boilerplate/engine logs <container_id>
+  ```
 
-```bash
-sudo apt update
-sudo apt install -y build-essential linux-headers-$(uname -r)
-```
+### 3. State Management
 
-### 3. Run the Environment Check
+* Maintains container metadata in `containers.txt`
+* Stores:
 
-```bash
-cd boilerplate
-chmod +x environment-check.sh
-sudo ./environment-check.sh
-```
+  * Container ID
+  * PID
+  * State
 
-Fix any issues reported before moving on.
+### 4. Kernel Module
 
-### 4. Prepare the Root Filesystem
+* Custom kernel module: `monitor.ko`
+* Registers device: `/dev/container_monitor`
+* Enables interaction between user-space runtime and kernel
 
-```bash
-mkdir rootfs-base
-wget https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-minirootfs-3.20.3-x86_64.tar.gz
-tar -xzf alpine-minirootfs-3.20.3-x86_64.tar.gz -C rootfs-base
+---
 
-# Make one writable copy per container you plan to run
-cp -a ./rootfs-base ./rootfs-alpha
-cp -a ./rootfs-base ./rootfs-beta
-```
+## 🛠️ Build Instructions
 
-Do not commit `rootfs-base/` or `rootfs-*` directories to your repository.
-
-### 5. Understand the Boilerplate
-
-The `boilerplate/` folder contains starter files:
-
-| File                   | Purpose                                             |
-| ---------------------- | --------------------------------------------------- |
-| `engine.c`             | User-space runtime and supervisor skeleton          |
-| `monitor.c`            | Kernel module skeleton                              |
-| `monitor_ioctl.h`      | Shared ioctl command definitions                    |
-| `Makefile`             | Build targets for both user-space and kernel module |
-| `cpu_hog.c`            | CPU-bound test workload                             |
-| `io_pulse.c`           | I/O-bound test workload                             |
-| `memory_hog.c`         | Memory-consuming test workload                      |
-| `environment-check.sh` | VM environment preflight check                      |
-
-Use these as your starting point. You are free to restructure the repository however you want — the submission requirements are listed in the project guide.
-
-### 6. Build and Verify
-
-```bash
-cd boilerplate
-make
-```
-
-If this compiles without errors, your environment is ready.
-
-### 7. GitHub Actions Smoke Check
-
-Your fork will inherit a minimal GitHub Actions workflow from this repository.
-
-That workflow only performs CI-safe checks:
-
-- `make -C boilerplate ci`
-- user-space binary compilation (`engine`, `memory_hog`, `cpu_hog`, `io_pulse`)
-- `./boilerplate/engine` with no arguments must print usage and exit with a non-zero status
-
-The CI-safe build command is:
+### Step 1: Compile User-Space Runtime
 
 ```bash
 make -C boilerplate ci
 ```
 
-This smoke check does not test kernel-module loading, supervisor runtime behavior, or container execution.
+### Step 2: Compile Kernel Module
+
+```bash
+make
+```
 
 ---
 
-## What to Do Next
+## ⚙️ Load Kernel Module
 
-Read [`project-guide.md`](project-guide.md) end to end. It contains:
+```bash
+sudo insmod monitor.ko
+sudo dmesg | tail
+```
 
-- The six implementation tasks (multi-container runtime, CLI, logging, kernel monitor, scheduling experiments, cleanup)
-- The engineering analysis you must write
-- The exact submission requirements, including what your `README.md` must contain (screenshots, analysis, design decisions)
+Note the major number from logs, then create device:
 
-Your fork's `README.md` should be replaced with your own project documentation as described in the submission package section of the project guide. (As in get rid of all the above content and replace with your README.md)
+```bash
+sudo mknod /dev/container_monitor c <major> 0
+sudo chmod 666 /dev/container_monitor
+```
+
+---
+
+## ▶️ Usage
+
+### Start Container
+
+```bash
+./boilerplate/engine start <id> <rootfs> "<command>"
+```
+
+Example:
+
+```bash
+./boilerplate/engine start c1 ./rootfs-alpha "/bin/sleep 10"
+```
+
+---
+
+### Stop Container
+
+```bash
+./boilerplate/engine stop <id>
+```
+
+---
+
+### List Containers
+
+```bash
+./boilerplate/engine ps
+```
+
+---
+
+### View Logs
+
+```bash
+./boilerplate/engine logs <id>
+```
+
+---
+
+## 📂 Project Structure
+
+```
+OS-Jackfruit/
+│
+├── boilerplate/
+│   ├── engine.c
+│   ├── monitor.c
+│   └── Makefile
+│
+├── containers.txt
+├── logs.txt
+└── README.md
+```
+
+---
+
+## ⚠️ Notes
+
+* Kernel warnings about unsigned modules are expected.
+* Unused function warnings can be ignored.
+* Device file must have proper permissions (`666`) for runtime to work.
+
+---
+
+## ✅ Conclusion
+
+This project demonstrates:
+
+* Process management in user space
+* File-based state tracking
+* Logging system implementation
+* Linux kernel module integration
+* Device interface communication
+
+---
+
+
