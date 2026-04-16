@@ -1,3 +1,4 @@
+
 # OS-Jackfruit: Container Runtime with Kernel Monitoring
 
 ## 📌 Overview
@@ -146,20 +147,19 @@ OS-Jackfruit/
 ## Screenshots
 
 ### 1. Container Start
-![Start](screenshots/start.png)
+![Start](./screenshots/start.png)
 
 ### 2. Container Status (engine ps)
-![Status](screenshots/ps.png)
+![Status](./screenshots/ps.png)
 
 ### 3. Container Stop
-![Stop](screenshots/stop.png)
+![Stop](./screenshots/stop.png)
 
 ### 4. Logs
-![Logs](screenshots/logs.png)
+![Logs](./screenshots/logs.png)
 
 ### 5. Kernel Logs (dmesg)
-![Kernel](screenshots/kernel.png)
-
+![Kernel](./screenshots/kernel.png)
 ---
 
 ## ✅ Conclusion
