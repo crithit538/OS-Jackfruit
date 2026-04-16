@@ -146,20 +146,19 @@ OS-Jackfruit/
 ## Screenshots
 
 ### 1. Container Start
-![Start](https://raw.githubusercontent.com/crithit538/OS-Jackfruit/main/screenshots/start.png)
+![Start](https://raw.githubusercontent.com/crithi538/OS-Jackfruit/main/screenshots/start.png)
 
 ### 2. Container Status (engine ps)
-![Status](https://raw.githubusercontent.com/crithit538/OS-Jackfruit/main/screenshots/ps.png)
+![Status](https://raw.githubusercontent.com/crithi538/OS-Jackfruit/main/screenshots/ps.png)
 
 ### 3. Container Stop
-![Stop](https://raw.githubusercontent.com/crithit538/OS-Jackfruit/main/screenshots/stop.png)
+![Stop](https://raw.githubusercontent.com/crithi538/OS-Jackfruit/main/screenshots/stop.png)
 
 ### 4. Logs
-![Logs](https://raw.githubusercontent.com/crithit538/OS-Jackfruit/main/screenshots/logs.png)
+![Logs](https://raw.githubusercontent.com/crithi538/OS-Jackfruit/main/screenshots/logs.png)
 
 ### 5. Kernel Logs (dmesg)
-![Kernel](https://raw.githubusercontent.com/crithit538/OS-Jackfruit/main/screenshots/kernel.png)
-
+![Kernel](https://raw.githubusercontent.com/crithi538/OS-Jackfruit/main/screenshots/kernel.png)
 ---
 
 ## ✅ Conclusion
